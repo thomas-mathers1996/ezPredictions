@@ -42,11 +42,15 @@ export function PredictionResultView({
 
       <div className="scoreboard" aria-label="Predicted score">
         <div className="score-row">
-          <span className="team-name">{result.homeTeam.toUpperCase()}</span>
+          <span className={`team-name ${getTeamNameLengthClass(result.homeTeam)}`}>
+            {result.homeTeam.toUpperCase()}
+          </span>
           <span className="score-box">{result.homeScore}</span>
         </div>
         <div className="score-row">
-          <span className="team-name">{result.awayTeam.toUpperCase()}</span>
+          <span className={`team-name ${getTeamNameLengthClass(result.awayTeam)}`}>
+            {result.awayTeam.toUpperCase()}
+          </span>
           <span className="score-box">{result.awayScore}</span>
         </div>
       </div>
@@ -146,6 +150,24 @@ export function PredictionResultView({
       </div>
     </section>
   );
+}
+
+function getTeamNameLengthClass(teamName: string): string {
+  const normalizedLength = teamName.replace(/\s+/g, ' ').trim().length;
+
+  if (normalizedLength >= 28) {
+    return 'team-name-very-long';
+  }
+
+  if (normalizedLength >= 20) {
+    return 'team-name-long';
+  }
+
+  if (normalizedLength >= 13) {
+    return 'team-name-medium';
+  }
+
+  return 'team-name-short';
 }
 
 function DataPoint({ label, value }: { label: string; value: string }) {

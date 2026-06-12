@@ -6,7 +6,7 @@ import {
   mapTeamsResponse,
   sendJson,
 } from './_footballData';
-import { ApiRequest, ApiResponse } from './_types';
+import type { ApiRequest, ApiResponse } from './_types';
 
 const TEAMS_CACHE = cacheHeader(60 * 60 * 24, 60 * 60 * 6);
 

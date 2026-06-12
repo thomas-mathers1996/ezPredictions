@@ -6,7 +6,7 @@ import {
   getSingleQueryValue,
   sendJson,
 } from './_footballData';
-import { ApiRequest, ApiResponse } from './_types';
+import type { ApiRequest, ApiResponse } from './_types';
 
 const TEAM_FORM_CACHE = cacheHeader(60 * 60, 60 * 15);
 

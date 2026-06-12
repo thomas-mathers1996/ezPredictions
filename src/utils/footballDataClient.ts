@@ -1,4 +1,4 @@
-import {
+import type {
   ApiErrorResponse,
   ApiSuccessResponse,
   FootballCompetition,
@@ -55,6 +55,17 @@ async function requestApi<T>(url: string): Promise<T> {
       ok: false,
       code: 'UPSTREAM_ERROR',
       message: 'Football data is unavailable. Oracle fallback is available.',
+      fallbackRecommended: true,
+    });
+  }
+
+  const contentType = response.headers.get('content-type') ?? '';
+
+  if (!contentType.toLowerCase().includes('application/json')) {
+    throw new FootballDataClientError({
+      ok: false,
+      code: 'UPSTREAM_ERROR',
+      message: 'Football data API endpoint is unavailable. Oracle fallback is available.',
       fallbackRecommended: true,
     });
   }

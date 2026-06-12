@@ -8,7 +8,7 @@ import {
   getSingleQueryValue,
   sendJson,
 } from './_footballData';
-import { ApiRequest, ApiResponse } from './_types';
+import type { ApiRequest, ApiResponse } from './_types';
 
 const PREDICTION_DATA_CACHE = cacheHeader(60 * 10, 60 * 10);
 

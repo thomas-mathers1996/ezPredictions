@@ -1,4 +1,4 @@
-import {
+import type {
   ApiErrorResponse,
   ApiSuccessResponse,
   FootballCompetition,
@@ -9,7 +9,7 @@ import {
   StandingsEntry,
   TeamForm,
 } from '../src/types/footballData';
-import { ApiResponse } from './_types';
+import type { ApiResponse } from './_types';
 
 const FOOTBALL_DATA_BASE_URL = 'https://api.football-data.org/v4';
 const RECENT_MATCH_LIMIT = 10;

@@ -31,7 +31,8 @@ export type PredictionResult = {
   metrics: OracleMetrics;
   analysisSentence: string;
   supportingStatistics: OracleStatistic[];
-  mode: 'oracle' | 'chaos';
+  mode: 'oracle' | 'fallback' | 'data' | 'chaos';
+  dataDetails?: import('../types/footballData').DataBackedDetails;
 };
 
 const PUNCTUATION_PATTERN = /[^\p{L}\p{N}\s]/gu;
@@ -297,8 +298,10 @@ export function createChaosOverride(previousResult: PredictionResult): Predictio
   const outcome = outcomeFor(homeScore, awayScore);
   const confidence = Math.round(49 + secureRandomUnit() * 48);
 
+  const { dataDetails: _dataDetails, ...baseResult } = previousResult;
+
   return {
-    ...previousResult,
+    ...baseResult,
     homeScore,
     awayScore,
     outcome,

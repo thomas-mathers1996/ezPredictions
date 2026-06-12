@@ -88,7 +88,7 @@ export function RecentPredictions({
                   </span>
                 </span>
                 <span className="history-meta">
-                  <span>{record.mode === 'chaos' ? 'Chaos override' : 'Standard prediction'}</span>
+                  <span>{getPredictionTypeLabel(record.mode)}</span>
                   <time dateTime={record.timestamp}>{formatter.format(new Date(record.timestamp))}</time>
                 </span>
               </button>
@@ -100,4 +100,16 @@ export function RecentPredictions({
       )}
     </aside>
   );
+}
+
+function getPredictionTypeLabel(mode: ProphecyRecord['mode']): string {
+  if (mode === 'data') {
+    return 'Data backed prediction';
+  }
+
+  if (mode === 'chaos') {
+    return 'Chaos override';
+  }
+
+  return 'Oracle fallback prediction';
 }

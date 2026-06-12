@@ -18,6 +18,13 @@ export function PredictionResultView({
   onShare,
 }: PredictionResultViewProps) {
   const isChaos = result.mode === 'chaos';
+  const isDataBacked = result.mode === 'data';
+  const isFallback = result.mode === 'fallback' || result.mode === 'oracle';
+  const resultLabel = isChaos
+    ? 'CHAOS OVERRIDE ACTIVE'
+    : isDataBacked
+      ? 'DATA BACKED ORACLE PREDICTION'
+      : 'ORACLE FALLBACK PREDICTION';
 
   return (
     <section
@@ -29,7 +36,7 @@ export function PredictionResultView({
       <div className="result-header">
         <div>
           <p className="panel-code">{isChaos ? 'REALITY OVERRIDE REPORT' : 'FINAL ORACLE OUTPUT'}</p>
-          <h2 id="result-title">{isChaos ? 'CHAOS OVERRIDE ACTIVE' : 'Result locked'}</h2>
+          <h2 id="result-title">{resultLabel}</h2>
         </div>
       </div>
 
@@ -46,6 +53,9 @@ export function PredictionResultView({
 
       <div className="result-intelligence">
         {isChaos ? <p className="chaos-banner">{result.outcomeLabel}</p> : null}
+        {isFallback && result.dataDetails?.fallbackReason ? (
+          <p className="fallback-banner">{result.dataDetails.fallbackReason}</p>
+        ) : null}
         <p className="outcome">{getOutcomeSummary(result)}</p>
         <p className="confidence">
           Oracle confidence <strong>{result.confidence}%</strong>
@@ -62,7 +72,46 @@ export function PredictionResultView({
         ))}
       </dl>
 
+      {result.dataDetails && !isChaos ? (
+        <div className="data-details" aria-label="Prediction data details">
+          <div>
+            <h3>Real performance metrics</h3>
+            <dl>
+              <DataPoint label="Competition" value={result.dataDetails.competitionName ?? 'Unavailable'} />
+              <DataPoint
+                label="Matches analysed"
+                value={`${result.dataDetails.matchesAnalysed.home} / ${result.dataDetails.matchesAnalysed.away}`}
+              />
+              <DataPoint
+                label="Recent form"
+                value={`${result.homeTeam}: ${result.dataDetails.recentForm.home} | ${result.awayTeam}: ${result.dataDetails.recentForm.away}`}
+              />
+              <DataPoint
+                label="Average goals scored"
+                value={`${result.dataDetails.averages.homeScored.toFixed(2)} / ${result.dataDetails.averages.awayScored.toFixed(2)}`}
+              />
+              <DataPoint
+                label="Average goals conceded"
+                value={`${result.dataDetails.averages.homeConceded.toFixed(2)} / ${result.dataDetails.averages.awayConceded.toFixed(2)}`}
+              />
+              {result.dataDetails.realMetrics.map((metric) => (
+                <DataPoint key={metric.label} label={metric.label} value={metric.value} />
+              ))}
+            </dl>
+          </div>
+          <div>
+            <h3>Entertainment presentation metrics</h3>
+            <dl>
+              {result.dataDetails.entertainmentMetrics.map((metric) => (
+                <DataPoint key={metric.label} label={metric.label} value={metric.value} />
+              ))}
+            </dl>
+          </div>
+        </div>
+      ) : null}
+
       <p className="disclaimer">{DISCLAIMER}</p>
+      <p className="data-attribution">Football data provided by football-data.org</p>
 
       <div className="result-actions">
         <button className="secondary-button" type="button" onClick={onPredictAnother}>
@@ -96,6 +145,15 @@ export function PredictionResultView({
         </div>
       </div>
     </section>
+  );
+}
+
+function DataPoint({ label, value }: { label: string; value: string }) {
+  return (
+    <div>
+      <dt>{label}</dt>
+      <dd>{value}</dd>
+    </div>
   );
 }
 

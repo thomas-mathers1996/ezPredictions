@@ -6,12 +6,11 @@ import {
   getSingleQueryValue,
   sendJson,
   withSafeJson,
-} from '../src/server/footballData';
-import type { ApiRequest, ApiResponse } from '../src/server/apiTypes';
+} from './_footballDataRuntime.js';
 
 const TEAM_FORM_CACHE = cacheHeader(60 * 60, 60 * 15);
 
-export default async function handler(req: ApiRequest, res: ApiResponse): Promise<void> {
+export default async function handler(req, res) {
   await withSafeJson(async () => {
     if (req.method && req.method !== 'GET') {
       sendJson(res, 405, createApiError('VALIDATION_ERROR', 'Only GET requests are supported.'), 'no-store');

@@ -8,7 +8,7 @@ type UserManualProps = {
 };
 
 const DISCLAIMER =
-  'The Football Oracle is an entertainment app. It does not use real football statistics and should not be used for betting or financial decisions.';
+  'Football-data.org information may be used to inform some predictions. Final predictions are generated for entertainment and should not be used for betting or financial decisions.';
 
 export function UserManual({ isOpen, onClose, returnFocusRef }: UserManualProps) {
   return (
@@ -23,17 +23,17 @@ export function UserManual({ isOpen, onClose, returnFocusRef }: UserManualProps)
         <section>
           <h3>What This App Does</h3>
           <p>
-            The Football Oracle generates fictional football predictions for entertainment. It
-            does not use real match data, real team form, real injuries, or real football
-            statistics.
+            The Football Oracle generates football predictions for entertainment. Real Team Mode
+            may use recent football information where available, while Manual Oracle Mode keeps the
+            fictional deterministic Oracle calculation available for any team names.
           </p>
         </section>
 
         <section>
           <h3>How to Make a Prediction</h3>
           <ol>
-            <li>Enter the home team.</li>
-            <li>Enter the away team.</li>
+            <li>Select Real Team Mode or Manual Oracle Mode.</li>
+            <li>Choose a supported competition and teams, or enter two manual team names.</li>
             <li>Select Generate Prediction.</li>
             <li>Wait while the Oracle completes its calculations.</li>
             <li>Review the predicted score and confidence level.</li>
@@ -41,11 +41,33 @@ export function UserManual({ isOpen, onClose, returnFocusRef }: UserManualProps)
         </section>
 
         <section>
-          <h3>Prediction Types</h3>
-          <h4>Standard Prediction</h4>
+          <h3>Real Team Mode</h3>
           <p>
-            The standard prediction is deterministic. The same teams entered in the same order
-            should normally produce the same result.
+            Select a competition and two supported teams. Recent football information from
+            football-data.org may influence the result when the service has enough completed match
+            data.
+          </p>
+        </section>
+
+        <section>
+          <h3>Manual Oracle Mode</h3>
+          <p>
+            Enter any two teams and receive a fictional deterministic prediction. This mode is also
+            used as the Oracle fallback when verified data is unavailable.
+          </p>
+        </section>
+
+        <section>
+          <h3>Prediction Types</h3>
+          <h4>Data Backed Predictions</h4>
+          <p>
+            Available recent matches, goals scored, goals conceded, form, home and away records, and
+            standings may be considered. Not every competition or team is available.
+          </p>
+          <h4>Oracle Fallback</h4>
+          <p>
+            The existing fictional model is used when verified data is unavailable, insufficient,
+            rate limited, or manually entered.
           </p>
           <h4>Chaos Override</h4>
           <p>
@@ -59,6 +81,14 @@ export function UserManual({ isOpen, onClose, returnFocusRef }: UserManualProps)
           <p>
             Team order matters. Swapping the home and away teams may change the generated result
             because the Oracle treats the home vector as part of the calculation.
+          </p>
+        </section>
+
+        <section>
+          <h3>API Availability</h3>
+          <p>
+            The external football service may occasionally be unavailable, return incomplete data,
+            or be rate limited. The app remains usable by activating Oracle fallback mode.
           </p>
         </section>
 

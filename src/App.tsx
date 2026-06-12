@@ -1,5 +1,5 @@
 import { RefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { PredictionForm } from './components/PredictionForm';
+import { PredictionEntryMode, PredictionForm } from './components/PredictionForm';
 import {
   ANALYSIS_STAGES,
   METRIC_LABELS,
@@ -10,12 +10,23 @@ import { RecentPredictions } from './components/RecentPredictions';
 import { ToastViewport } from './components/ToastViewport';
 import { UserManual } from './components/UserManual';
 import { AppPhase, ProphecyRecord, ToastMessage } from './types';
+import { FootballCompetition, FootballTeam } from './types/footballData';
+import {
+  createDataBackedPrediction,
+  createOracleFallbackPrediction,
+  hasEnoughDataForPrediction,
+} from './utils/dataBackedPrediction';
+import {
+  FootballDataClientError,
+  loadCompetitions,
+  loadPredictionData,
+  loadTeams,
+} from './utils/footballDataClient';
 import {
   OracleMetrics,
   PredictionResult,
   areTeamsIdentical,
   createChaosOverride,
-  createPrediction,
   formatTeamNameForDisplay,
 } from './utils/prediction';
 import { createResultShareText } from './utils/share';
@@ -86,6 +97,26 @@ function getValidationMessage(homeTeam: string, awayTeam: string): string {
   return '';
 }
 
+function getFootballDataErrorMessage(error: unknown): string {
+  if (error instanceof FootballDataClientError) {
+    if (error.code === 'RATE_LIMITED') {
+      return 'Rate limit reached. Oracle fallback is available.';
+    }
+
+    if (error.code === 'CONFIGURATION_ERROR') {
+      return 'API unavailable. Football data is not configured, so Oracle fallback is available.';
+    }
+
+    if (error.code === 'NO_DATA') {
+      return 'No recent matches available. Oracle fallback is available.';
+    }
+
+    return error.message;
+  }
+
+  return 'Unexpected response received. Oracle fallback is available.';
+}
+
 function loadHistory(): ProphecyRecord[] {
   try {
     const storedHistory = window.localStorage.getItem(HISTORY_STORAGE_KEY);
@@ -120,7 +151,7 @@ function isProphecyRecord(record: unknown): record is ProphecyRecord {
     typeof candidate.homeScore === 'number' &&
     typeof candidate.awayScore === 'number' &&
     typeof candidate.timestamp === 'string' &&
-    (candidate.mode === 'oracle' || candidate.mode === 'chaos') &&
+    (candidate.mode === 'oracle' || candidate.mode === 'fallback' || candidate.mode === 'data' || candidate.mode === 'chaos') &&
     isPredictionResult(candidate.result)
   );
 }
@@ -146,7 +177,7 @@ function isPredictionResult(result: unknown): result is PredictionResult {
     typeof candidate.confidence === 'number' &&
     typeof candidate.analysisSentence === 'string' &&
     Array.isArray(candidate.supportingStatistics) &&
-    (candidate.mode === 'oracle' || candidate.mode === 'chaos')
+    (candidate.mode === 'oracle' || candidate.mode === 'fallback' || candidate.mode === 'data' || candidate.mode === 'chaos')
   );
 }
 
@@ -188,8 +219,18 @@ function OracleHeader({ manualButtonRef, onOpenManual }: OracleHeaderProps) {
 export default function App() {
   const reducedMotion = usePrefersReducedMotion();
   const [phase, setPhase] = useState<AppPhase>('input');
+  const [predictionMode, setPredictionMode] = useState<PredictionEntryMode>('real');
   const [homeTeam, setHomeTeam] = useState('');
   const [awayTeam, setAwayTeam] = useState('');
+  const [competitions, setCompetitions] = useState<FootballCompetition[]>([]);
+  const [teams, setTeams] = useState<FootballTeam[]>([]);
+  const [selectedCompetition, setSelectedCompetition] = useState('');
+  const [selectedHomeTeamId, setSelectedHomeTeamId] = useState('');
+  const [selectedAwayTeamId, setSelectedAwayTeamId] = useState('');
+  const [isLoadingCompetitions, setIsLoadingCompetitions] = useState(false);
+  const [isLoadingTeams, setIsLoadingTeams] = useState(false);
+  const [competitionsError, setCompetitionsError] = useState('');
+  const [teamsError, setTeamsError] = useState('');
   const [showValidation, setShowValidation] = useState(false);
   const [pendingPrediction, setPendingPrediction] = useState<PredictionResult | null>(null);
   const [result, setResult] = useState<PredictionResult | null>(null);
@@ -208,7 +249,26 @@ export default function App() {
   const trimmedHomeTeam = formatTeamNameForDisplay(homeTeam);
   const trimmedAwayTeam = formatTeamNameForDisplay(awayTeam);
   const validationMessage = useMemo(() => getValidationMessage(homeTeam, awayTeam), [homeTeam, awayTeam]);
-  const canPredict = validationMessage.length === 0 && phase !== 'analysis';
+  const selectedHomeTeam = teams.find((team) => String(team.id) === selectedHomeTeamId) ?? null;
+  const selectedAwayTeam = teams.find((team) => String(team.id) === selectedAwayTeamId) ?? null;
+  const realModeValidationMessage = useMemo(() => {
+    if (!selectedCompetition) {
+      return 'Select a competition before the data uplink can begin.';
+    }
+
+    if (!selectedHomeTeamId || !selectedAwayTeamId) {
+      return 'Select both real teams before the data uplink can begin.';
+    }
+
+    if (selectedHomeTeamId === selectedAwayTeamId) {
+      return 'Home and away teams must be different.';
+    }
+
+    return '';
+  }, [selectedAwayTeamId, selectedCompetition, selectedHomeTeamId]);
+  const canPredict =
+    phase !== 'analysis' &&
+    (predictionMode === 'manual' ? validationMessage.length === 0 : realModeValidationMessage.length === 0);
 
   const addToast = useCallback((message: string, tone: ToastMessage['tone'] = 'info') => {
     const id = Date.now() + Math.floor(performance.now());
@@ -217,6 +277,56 @@ export default function App() {
       setToasts((currentToasts) => currentToasts.filter((toast) => toast.id !== id));
     }, 3600);
   }, []);
+
+  const refreshCompetitions = useCallback(async () => {
+    setIsLoadingCompetitions(true);
+    setCompetitionsError('');
+    addToast('Loading competitions', 'info');
+
+    try {
+      const nextCompetitions = await loadCompetitions();
+      setCompetitions(nextCompetitions);
+
+      if (nextCompetitions.length === 0) {
+        setCompetitionsError('No competitions are currently available.');
+      }
+    } catch (error) {
+      const message = getFootballDataErrorMessage(error);
+      setCompetitionsError(message);
+      addToast(message, 'error');
+    } finally {
+      setIsLoadingCompetitions(false);
+    }
+  }, [addToast]);
+
+  const refreshTeams = useCallback(async () => {
+    if (!selectedCompetition) {
+      setTeams([]);
+      return;
+    }
+
+    setIsLoadingTeams(true);
+    setTeamsError('');
+    addToast('Loading teams', 'info');
+
+    try {
+      const nextTeams = await loadTeams(selectedCompetition);
+      setTeams(nextTeams);
+      setSelectedHomeTeamId('');
+      setSelectedAwayTeamId('');
+
+      if (nextTeams.length === 0) {
+        setTeamsError('No teams are available for this competition.');
+      }
+    } catch (error) {
+      const message = getFootballDataErrorMessage(error);
+      setTeams([]);
+      setTeamsError(message);
+      addToast(message, 'error');
+    } finally {
+      setIsLoadingTeams(false);
+    }
+  }, [addToast, selectedCompetition]);
 
   const persistHistory = useCallback(
     (nextHistory: ProphecyRecord[]) => {
@@ -261,6 +371,14 @@ export default function App() {
     },
     [addToast],
   );
+
+  useEffect(() => {
+    void refreshCompetitions();
+  }, [refreshCompetitions]);
+
+  useEffect(() => {
+    void refreshTeams();
+  }, [refreshTeams]);
 
   useEffect(() => {
     if (phase !== 'analysis' || !pendingPrediction) {
@@ -320,33 +438,81 @@ export default function App() {
   };
 
   const handleSwapTeams = () => {
-    setHomeTeam(awayTeam);
-    setAwayTeam(homeTeam);
+    if (predictionMode === 'real') {
+      setSelectedHomeTeamId(selectedAwayTeamId);
+      setSelectedAwayTeamId(selectedHomeTeamId);
+    } else {
+      setHomeTeam(awayTeam);
+      setAwayTeam(homeTeam);
+    }
+
     setShowValidation(true);
   };
 
-  const handleSubmitPrediction = () => {
+  const startAnalysis = (prediction: PredictionResult) => {
+    isPredictionActiveRef.current = true;
+    setPendingPrediction(prediction);
+    setResult(null);
+    setProgress(0);
+    setStageIndex(0);
+    setPhase('analysis');
+    addToast('Prediction started', 'info');
+  };
+
+  const handleSubmitPrediction = async () => {
     setShowValidation(true);
 
     if (phase === 'analysis' || isPredictionActiveRef.current) {
       return;
     }
 
-    if (validationMessage) {
+    if (predictionMode === 'manual') {
+      if (validationMessage) {
+        return;
+      }
+
+      try {
+        const prediction = createOracleFallbackPrediction(
+          homeTeam,
+          awayTeam,
+          'Manual Oracle Mode uses the deterministic fictional fallback model.',
+        );
+        startAnalysis(prediction);
+        addToast('Oracle fallback activated', 'info');
+      } catch {
+        addToast('Unexpected error', 'error');
+      }
+      return;
+    }
+
+    if (realModeValidationMessage || !selectedHomeTeam || !selectedAwayTeam) {
       return;
     }
 
     try {
-      const prediction = createPrediction(homeTeam, awayTeam);
-      isPredictionActiveRef.current = true;
-      setPendingPrediction(prediction);
-      setResult(null);
-      setProgress(0);
-      setStageIndex(0);
-      setPhase('analysis');
-      addToast('Prediction started', 'info');
-    } catch {
-      addToast('Unexpected error', 'error');
+      addToast('Analysing recent matches', 'info');
+      const predictionData = await loadPredictionData(
+        Number(selectedHomeTeamId),
+        Number(selectedAwayTeamId),
+        selectedCompetition,
+      );
+      const prediction = hasEnoughDataForPrediction(predictionData)
+        ? createDataBackedPrediction(predictionData)
+        : createOracleFallbackPrediction(
+            selectedHomeTeam.name,
+            selectedAwayTeam.name,
+            'No recent matches available. Oracle fallback is available.',
+            predictionData.competition.name,
+          );
+
+      startAnalysis(prediction);
+      addToast(prediction.mode === 'data' ? 'Data backed prediction completed' : 'Oracle fallback activated', prediction.mode === 'data' ? 'success' : 'info');
+    } catch (error) {
+      const reason = getFootballDataErrorMessage(error);
+      const fallback = createOracleFallbackPrediction(selectedHomeTeam.name, selectedAwayTeam.name, reason, selectedCompetition);
+      startAnalysis(fallback);
+      addToast(reason, 'error');
+      addToast('Oracle fallback activated', 'info');
     }
   };
 
@@ -441,12 +607,35 @@ export default function App() {
             <PredictionForm
               awayTeam={awayTeam}
               canPredict={canPredict}
+              competitions={competitions}
+              competitionsError={competitionsError}
               homeTeam={homeTeam}
+              isLoadingCompetitions={isLoadingCompetitions}
+              isLoadingTeams={isLoadingTeams}
+              mode={predictionMode}
               onAwayTeamChange={handleAwayTeamChange}
+              onAwayTeamSelect={setSelectedAwayTeamId}
+              onCompetitionChange={(value) => {
+                setSelectedCompetition(value);
+                setShowValidation(true);
+              }}
               onHomeTeamChange={handleHomeTeamChange}
+              onHomeTeamSelect={setSelectedHomeTeamId}
+              onModeChange={(mode) => {
+                setPredictionMode(mode);
+                setShowValidation(false);
+              }}
+              onRetryCompetitions={refreshCompetitions}
+              onRetryTeams={refreshTeams}
               onSubmit={handleSubmitPrediction}
               onSwapTeams={handleSwapTeams}
+              realModeValidationMessage={realModeValidationMessage}
+              selectedAwayTeamId={selectedAwayTeamId}
+              selectedCompetition={selectedCompetition}
+              selectedHomeTeamId={selectedHomeTeamId}
               showValidation={showValidation || homeTeam.length > 0 || awayTeam.length > 0}
+              teams={teams}
+              teamsError={teamsError}
               validationMessage={validationMessage}
             />
           ) : null}

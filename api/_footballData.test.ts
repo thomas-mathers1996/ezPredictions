@@ -169,4 +169,25 @@ describe('football-data API mapping utilities', () => {
       expect(result.error.code).toBe('CONFIGURATION_ERROR');
     }
   });
+
+  it('handles a missing runtime fetch implementation safely', async () => {
+    const originalFetch = globalThis.fetch;
+    Reflect.deleteProperty(globalThis, 'fetch');
+
+    try {
+      const result = await footballDataFetch('/competitions', mapCompetitionsResponse);
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.error.code).toBe('UPSTREAM_ERROR');
+        expect(result.error.message).toContain('runtime is unavailable');
+      }
+    } finally {
+      Object.defineProperty(globalThis, 'fetch', {
+        configurable: true,
+        writable: true,
+        value: originalFetch,
+      });
+    }
+  });
 });

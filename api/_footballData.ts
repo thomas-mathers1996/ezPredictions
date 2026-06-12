@@ -14,7 +14,7 @@ import type { ApiResponse } from './_types';
 const FOOTBALL_DATA_BASE_URL = 'https://api.football-data.org/v4';
 const RECENT_MATCH_LIMIT = 10;
 
-type Fetcher = typeof fetch;
+type Fetcher = (url: string, init?: RequestInit) => Promise<Response>;
 
 type FootballDataResult<T> =
   | {
@@ -85,6 +85,19 @@ export function sendJson<T>(res: ApiResponse, statusCode: number, body: ApiSucce
   res.status(statusCode).json(body);
 }
 
+export async function withSafeJson(handler: () => Promise<void>, res: ApiResponse): Promise<void> {
+  try {
+    await handler();
+  } catch {
+    sendJson(
+      res,
+      500,
+      createApiError('UPSTREAM_ERROR', 'Football data API function failed safely. Oracle fallback is available.'),
+      'no-store',
+    );
+  }
+}
+
 export function cacheHeader(seconds: number, staleSeconds: number): string {
   return `public, s-maxage=${seconds}, stale-while-revalidate=${staleSeconds}`;
 }
@@ -92,9 +105,9 @@ export function cacheHeader(seconds: number, staleSeconds: number): string {
 export async function footballDataFetch<T>(
   path: string,
   mapResponse: (payload: unknown) => T | null,
-  fetcher: Fetcher = fetch,
+  fetcher?: Fetcher,
 ): Promise<FootballDataResult<T>> {
-  const token = process.env.FOOTBALL_DATA_API_KEY;
+  const token = process.env.FOOTBALL_DATA_API_KEY?.trim();
 
   if (!token) {
     return {
@@ -107,9 +120,20 @@ export async function footballDataFetch<T>(
   let response: Response;
 
   try {
-    response = await fetcher(`${FOOTBALL_DATA_BASE_URL}${path}`, {
+    const activeFetcher = fetcher ?? globalThis.fetch?.bind(globalThis);
+
+    if (!activeFetcher) {
+      return {
+        ok: false,
+        status: 502,
+        error: createApiError('UPSTREAM_ERROR', 'Football data runtime is unavailable. Oracle fallback is available.'),
+      };
+    }
+
+    response = await activeFetcher(`${FOOTBALL_DATA_BASE_URL}${path}`, {
       headers: {
         'X-Auth-Token': token,
+        Accept: 'application/json',
       },
     });
   } catch {

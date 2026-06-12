@@ -13,6 +13,10 @@ describe('frontend secret protection', () => {
 });
 
 async function collectSourceFiles(directory: string): Promise<string[]> {
+  if (directory.endsWith('/src/server')) {
+    return [];
+  }
+
   const entries = await readdir(directory);
   const files = await Promise.all(
     entries.map(async (entry) => {

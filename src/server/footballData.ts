@@ -8,8 +8,8 @@ import type {
   RecentMatch,
   StandingsEntry,
   TeamForm,
-} from '../src/types/footballData';
-import type { ApiResponse } from './_types';
+} from '../types/footballData';
+import type { ApiResponse } from './apiTypes';
 
 const FOOTBALL_DATA_BASE_URL = 'https://api.football-data.org/v4';
 const RECENT_MATCH_LIMIT = 10;

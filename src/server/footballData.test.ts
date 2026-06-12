@@ -6,8 +6,8 @@ import {
   mapMatchesResponse,
   mapStandingsResponse,
   mapTeamsResponse,
-} from './_footballData';
-import { RecentMatch } from '../src/types/footballData';
+} from './footballData';
+import { RecentMatch } from '../types/footballData';
 
 const matches: RecentMatch[] = [
   {
